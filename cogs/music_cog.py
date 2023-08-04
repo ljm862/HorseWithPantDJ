@@ -82,6 +82,11 @@ class music_cog(commands.Cog):
                 if self.is_playing == False:
                     await self.start_playing(ctx)
 
+    def resume_playing(self):
+            self.is_paused = False
+            self.is_playing = True
+            self.vc.resume()
+
     @commands.command(name="pause", help="Pauses the current song")
     async def pause(self, ctx, *args):
         if self.is_playing:
@@ -89,14 +94,12 @@ class music_cog(commands.Cog):
             self.is_paused = True
             self.vc.pause()
         elif self.is_paused:
-            self.vc.resume()
+            self.resume_playing()
 
     @commands.command(name="resume", aliases=["r"], help="Resumes the current song")
     async def resume(self, ctx, *args):
         if self.is_paused:
-            self.is_paused = False
-            self.is_playing = True
-            self.vc.resume()
+            self.resume_playing()
 
     @commands.command(name="skip", aliases=["next", "s"], help="Skips the current song")
     async def skip(self, ctx, *args):
@@ -106,9 +109,7 @@ class music_cog(commands.Cog):
 
     @commands.command(name="clear", help="Clears the queue")
     async def clear(self, ctx, *args):
-        if self.vc != None and self.is_playing:
-            self.vc.stop()
-        self.music_queue = []
+        self.music_queue.clear()
         await ctx.send("Queue cleared")
 
     @commands.command(name="queue", aliases=["list"], help="Displays the list of songs in order")
@@ -116,7 +117,8 @@ class music_cog(commands.Cog):
         queue = ""
         x = 10 # number of songs in the queue to display
         for i in range(len(self.music_queue)):
-            if i > x:
+            if i >= x:
+                queue += f"{len(self.music_queue)-x} more songs in the queue"
                 break
             queue += self.music_queue[i]['title'] + "\n"
 
