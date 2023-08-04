@@ -1,6 +1,7 @@
 import discord
 import asyncio
 from discord.ext import commands
+from cogs.music_cog import music_cog
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -11,6 +12,7 @@ def run_bot():
 
     @bot.event
     async def on_ready():
+        await bot.add_cog(music_cog(bot))
         print("loaded cogs")
 
     print("Hello World")
