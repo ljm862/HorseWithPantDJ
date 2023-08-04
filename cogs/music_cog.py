@@ -53,7 +53,7 @@ class music_cog(commands.Cog):
                 self.vc = await ctx.author.voice.channel.connect()
                 print("joined vc")
 
-                if self.vc ==None:
+                if self.vc == None:
                     await ctx.send("Unable to join channel")
                     return
             # Maybe else here to move to the called channel?
@@ -82,34 +82,53 @@ class music_cog(commands.Cog):
                 if self.is_playing == False:
                     await self.start_playing(ctx)
 
+    def resume_playing(self):
+            self.is_paused = False
+            self.is_playing = True
+            self.vc.resume()
+
     @commands.command(name="pause", help="Pauses the current song")
     async def pause(self, ctx, *args):
-        #TODO
-        print("todo")
+        if self.is_playing:
+            self.is_playing = False
+            self.is_paused = True
+            self.vc.pause()
+        elif self.is_paused:
+            self.resume_playing()
 
     @commands.command(name="resume", aliases=["r"], help="Resumes the current song")
     async def resume(self, ctx, *args):
-        #TODO
-        print("todo")
+        if self.is_paused:
+            self.resume_playing()
 
     @commands.command(name="skip", aliases=["next", "s"], help="Skips the current song")
     async def skip(self, ctx, *args):
-        #TODO
-        print("todo")
-
+        if self.vc != None and self.vc:
+            self.vc.stop()
+            await self.start_playing(ctx)
 
     @commands.command(name="clear", help="Clears the queue")
-    async def clear(self,ctx, *args):
-        #TODO
-        print("todo")
+    async def clear(self, ctx, *args):
+        self.music_queue.clear()
+        await ctx.send("Queue cleared")
 
     @commands.command(name="queue", aliases=["list"], help="Displays the list of songs in order")
     async def queue(self, ctx, *args):
-        #TODO
-        print("todo")
+        queue = ""
+        x = 10 # number of songs in the queue to display
+        for i in range(len(self.music_queue)):
+            if i >= x:
+                queue += f"{len(self.music_queue)-x} more songs in the queue"
+                break
+            queue += self.music_queue[i]['title'] + "\n"
 
+        if queue != "":
+            await ctx.send(queue)
+        else:
+            await ctx.send("Nothing in queue")
 
     @commands.command(name="stop", aliases=["quit", "leave", "disconnect"], help="Kicks the bot from the channel")
     async def stop(self, ctx, *args):
-        #TODO
-        print("todo")
+        self.is_playing = False
+        self.is_paused = False
+        await self.vc.disconnect()
