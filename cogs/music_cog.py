@@ -3,12 +3,18 @@ from discord.ext import commands
 
 from yt_dlp import YoutubeDL
 
+import asyncio
+
 class music_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.is_playing = False
         self.is_paused = False
         self.vc = None
+
+        self.timeout_task = None
+        self.timing_out = False
+        self.connected = True
 
         self.music_queue = []
         self.ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
@@ -40,6 +46,26 @@ class music_cog(commands.Cog):
             self.play_music(url)
         else:
             self.is_playing = False
+            if self.connected:
+                asyncio.run(self.create_timeout())
+
+    async def create_timeout(self):
+        print("Timeout task created")
+        self.timeout_task = asyncio.create_task(self.begin_timeout())
+        await self.timeout_task
+
+    async def begin_timeout(self):
+            print("Timeout started")
+            self.timing_out = True
+            await asyncio.sleep(5)
+            print("Slept")
+            await self.disconnect()
+
+    def cancel_timeout(self):
+        if self.timing_out and self.timeout_task != None:
+            print("Timeout cancelled")
+            self.timeout_task.cancel()
+            self.timing_out = False
     
     def play_music(self, url):
         self.vc.play(discord.FFmpegPCMAudio(url, **self.ffmpeg_options), after=lambda e: self.play_next_video())
@@ -72,6 +98,8 @@ class music_cog(commands.Cog):
         elif self.is_paused:
             self.vc.resume()
         else:
+            self.cancel_timeout()
+            
             song = self.find_video(query)
             if type(song) == type(True):
                 await ctx.send("Couldn't find the video")
@@ -105,6 +133,7 @@ class music_cog(commands.Cog):
     async def skip(self, ctx, *args):
         if self.vc != None and self.vc:
             self.vc.stop()
+            await ctx.send("Song skipped")
             await self.start_playing(ctx)
 
     @commands.command(name="clear", help="Clears the queue")
@@ -129,6 +158,13 @@ class music_cog(commands.Cog):
 
     @commands.command(name="stop", aliases=["quit", "leave", "disconnect"], help="Kicks the bot from the channel")
     async def stop(self, ctx, *args):
+        await self.disconnect()
+
+    async def disconnect(self):
         self.is_playing = False
         self.is_paused = False
+        self.connected = False
+        print("Before disconnect")
+        #self.timeout_task.cancel()
         await self.vc.disconnect()
+        print("After disconnected")
