@@ -16,6 +16,7 @@ class music_cog(commands.Cog):
         self.timing_out = False
 
         self.music_queue = []
+        self.current_song = None
         self.ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
         self.yt_options = {'format': 'm4a/bestaudio.best', 'noplaylist': 'True', 'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'm4a'}]}
 
@@ -28,34 +29,35 @@ class music_cog(commands.Cog):
                 print("Error retrieving video: [%s]" % query)
                 return False
             #print(info['formats'])
-            return {'source': info['url'], 'title': info['title']}
+            return {'source': info['url'], 'title': info['title'], 'id': info['id']}
         
     def load_next_video(self):
         if len(self.music_queue) > 0:
             self.is_playing = True
             url = self.music_queue[0]['source']
-            print("url: %s" % url)
+            #print("url: %s" % url)
         return url
     
-    def play_next_video(self):
+    def play_next_video(self, ctx):
         if len(self.music_queue) > 0:
             url = self.load_next_video()
-            self.music_queue.pop(0)
+            self.current_song = self.music_queue.pop(0)
+            asyncio.run_coroutine_threadsafe(self.send_playing_message(ctx), self.bot.loop)
 
-            self.play_music(url)
+            self.play_music(url, ctx)
         else:
             self.is_playing = False
+            self.current_song = None
             if not self.timing_out:
                 asyncio.run_coroutine_threadsafe(self.create_timeout(), self.bot.loop)
 
     async def create_timeout(self):
-        print("Timeout task created")
+        # start a cancellable timeout
         self.timeout_task = asyncio.create_task(self.begin_timeout())
         await self.timeout_task
 
     async def begin_timeout(self):
             t = 600  # time in seconds for bot to timeout after being idle
-            print("Timeout started")
             self.timing_out = True
             await asyncio.sleep(t)
             await self.disconnect()
@@ -63,12 +65,11 @@ class music_cog(commands.Cog):
 
     def cancel_timeout(self):
         if self.timing_out and self.timeout_task != None:
-            print("Timeout cancelled")
             self.timeout_task.cancel()
             self.timing_out = False
-    
-    def play_music(self, url):
-        self.vc.play(discord.FFmpegPCMAudio(url, **self.ffmpeg_options), after=lambda e: self.play_next_video())
+
+    def play_music(self, url, ctx):
+        self.vc.play(discord.FFmpegPCMAudio(url, **self.ffmpeg_options), after=lambda e: self.play_next_video(ctx))
         
     async def start_playing(self, ctx):
         if len(self.music_queue) > 0:
@@ -84,27 +85,39 @@ class music_cog(commands.Cog):
                     return
             # Maybe else here to move to the called channel?
 
-            self.music_queue.pop(0)
-            self.play_music(url)
-            
+            self.current_song = self.music_queue.pop(0)
+            await self.send_playing_message(ctx)
+            self.play_music(url, ctx)
+
+    async def send_playing_message(self, ctx):
+            await ctx.send("Now playing: %s https://www.youtube.com/watch?v=%s" % (self.current_song['title'], self.current_song['id']))
+
+    # strips time and channel from url
+    def strip_url(self, url):
+        if "&t=" in url:
+            url = url[:url.index("&t=")]
+        if "&ab_channel=" in url:
+            url = url[:url.index("&ab_channel=")]
+        return url
 
     @commands.command(name="play", aliases=['p'], help="Play the song from youtube")
     async def command_play(self, ctx, *args):
         query = " ".join(args)
+        query = self.strip_url(query)
         voice_channel = ctx.author.voice.channel
 
         if voice_channel is None:
             await ctx.send("First join a voice channel")
         elif self.is_paused:
             self.vc.resume()
-        else:            
+        else:
             self.cancel_timeout()
             song = self.find_video(query)
             if type(song) == type(True):
                 await ctx.send("Couldn't find the video")
             else:
                 self.music_queue.append(song)
-                await ctx.send("Added: %s to the queue at position %s" % (query, len(self.music_queue)))
+                await ctx.send("Added: %s https://www.youtube.com/watch?v=%s to the queue at position %s" % (song['title'], song['id'], len(self.music_queue)))
 
                 if self.is_playing == False:
                     await self.start_playing(ctx)
@@ -132,8 +145,12 @@ class music_cog(commands.Cog):
     async def skip(self, ctx, *args):
         if self.vc != None and self.vc:
             self.vc.stop()
-            await ctx.send("Song skipped")
-            await self.start_playing(ctx)
+            if self.current_song != None:
+                skipped_song = self.current_song['title']
+                await ctx.send(str(skipped_song) + " skipped")
+            else:
+                await ctx.send("Song skipped")
+            #await self.start_playing(ctx)
 
     @commands.command(name="clear", help="Clears the queue")
     async def clear(self, ctx, *args):
@@ -162,4 +179,5 @@ class music_cog(commands.Cog):
     async def disconnect(self):
         self.is_playing = False
         self.is_paused = False
+        self.current_song = None
         await self.vc.disconnect()
