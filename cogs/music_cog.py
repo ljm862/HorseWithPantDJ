@@ -98,7 +98,9 @@ class music_cog(commands.Cog):
         return validators.url(query)
 
     def strip_url(self, url):
-        return url[:url.index("&")]
+        if "&" in url:
+            return url[:url.index("&")]
+        return url
 
     @commands.command(name="play", aliases=['p'], help="Play the song from youtube")
     async def command_play(self, ctx, *args):
