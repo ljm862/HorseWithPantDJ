@@ -5,6 +5,8 @@ from yt_dlp import YoutubeDL
 
 import asyncio
 
+import validators
+
 class music_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -92,18 +94,17 @@ class music_cog(commands.Cog):
     async def send_playing_message(self, ctx):
             await ctx.send("Now playing: %s https://www.youtube.com/watch?v=%s" % (self.current_song['title'], self.current_song['id']))
 
-    # strips time and channel from url
+    def is_url(self, query):
+        return validators.url(query)
+
     def strip_url(self, url):
-        if "&t=" in url:
-            url = url[:url.index("&t=")]
-        if "&ab_channel=" in url:
-            url = url[:url.index("&ab_channel=")]
-        return url
+        return url[:url.index("&")]
 
     @commands.command(name="play", aliases=['p'], help="Play the song from youtube")
     async def command_play(self, ctx, *args):
         query = " ".join(args)
-        query = self.strip_url(query)
+        if self.is_url(query):
+            query = self.strip_url(query)
         voice_channel = ctx.author.voice.channel
 
         if voice_channel is None:
@@ -117,7 +118,8 @@ class music_cog(commands.Cog):
                 await ctx.send("Couldn't find the video")
             else:
                 self.music_queue.append(song)
-                await ctx.send("Added: %s https://www.youtube.com/watch?v=%s to the queue at position %s" % (song['title'], song['id'], len(self.music_queue)))
+                if self.current_song != None:
+                    await ctx.send("Added: %s https://www.youtube.com/watch?v=%s to the queue at position %s" % (song['title'], song['id'], len(self.music_queue)))
 
                 if self.is_playing == False:
                     await self.start_playing(ctx)
@@ -148,9 +150,6 @@ class music_cog(commands.Cog):
             if self.current_song != None:
                 skipped_song = self.current_song['title']
                 await ctx.send(str(skipped_song) + " skipped")
-            else:
-                await ctx.send("Song skipped")
-            #await self.start_playing(ctx)
 
     @commands.command(name="clear", help="Clears the queue")
     async def clear(self, ctx, *args):
@@ -180,4 +179,5 @@ class music_cog(commands.Cog):
         self.is_playing = False
         self.is_paused = False
         self.current_song = None
+        self.music_queue.clear()
         await self.vc.disconnect()
