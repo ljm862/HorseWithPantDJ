@@ -5,6 +5,8 @@ from yt_dlp import YoutubeDL
 
 import asyncio
 
+import validators
+
 class music_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -92,23 +94,17 @@ class music_cog(commands.Cog):
     async def send_playing_message(self, ctx):
             await ctx.send("Now playing: %s https://www.youtube.com/watch?v=%s" % (self.current_song['title'], self.current_song['id']))
 
+    def is_url(self, query):
+        return validators.url(query)
+
     def strip_url(self, url):
-        if "&t=" in url:
-            url = url[:url.index("&t=")]
-        if "&ab_channel=" in url:
-            url = url[:url.index("&ab_channel=")]
-        if "&list=" in url:
-            url = url[:url.index("&list=")]
-        if "&start_radio=" in url:
-            url = url[:url.index("&start_radio=")]
-        if "&index=" in url:
-            url = url[:url.index("&index=")]
-        return url
+        return url[:url.index("&")]
 
     @commands.command(name="play", aliases=['p'], help="Play the song from youtube")
     async def command_play(self, ctx, *args):
         query = " ".join(args)
-        query = self.strip_url(query)
+        if self.is_url(query):
+            query = self.strip_url(query)
         voice_channel = ctx.author.voice.channel
 
         if voice_channel is None:
